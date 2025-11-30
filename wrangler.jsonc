@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "static-proxy",
+  "main": "src/index.ts",
+  "assets": {
+    "directory": "./public"
+  },
+  "compatibility_date": "2025-11-25",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "PROXY_ORIGIN": "https://test-assets.jldec.workers.dev",
+    "PROXY_PATHS": "/",
+    "PROXY_LEVELS": 0,
+    "GH_REPO": "jldec/static-proxy",
+    "GH_BRANCH": "main"
+  }
+}

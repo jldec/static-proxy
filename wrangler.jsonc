@@ -10,9 +10,11 @@
     "enabled": true
   },
   "vars": {
+    // NOTE: no trailing slash
     "PROXY_ORIGIN": "https://test-assets.jldec.workers.dev",
-    "PROXY_PATHS": "/",
-    "PROXY_LEVELS": 0,
+    "SOURCE_ORIGIN": "https://futuremedia-concepts.com",
+    "SOURCE_PATHS": "/",
+    "SOURCE_LEVELS": 0,
     "GH_REPO": "jldec/static-proxy",
     "GH_BRANCH": "main"
   }

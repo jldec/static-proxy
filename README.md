@@ -17,13 +17,15 @@ May be run once, or repeatedly e.g. if using original WP site for CMS.
 - Updates workers assets by running wrangler deploy against a directory inside the container.
 - Container includes git, cloned repo, pnpm install (for wrangler etc.), bun/deno, puppeteer.
 
-### /rewrite-page/url... worker route
+### /rewrite-page/url...
 - Fetches a page from /url at wordpress origin and uses HTMLRewriter to munge the HTML.
-- See https://developers.cloudflare.com/workers/runtime-apis/html-rewriter
+- See https://developers.cloudflare.com/workers/runtime-apis/html-rewriter (more links in src/index.ts)
 - Typically called from the /update-pages script running in the container
-- Rewrites links e.g. to replace same origin with relative urls, or removes unwanted elements.
-- Collects manifest of top-level resources from src URLs in the HTML e.g. images in srcset.
-- Returns JSON with page content and resources manifest.
+- Rewrites links e.g. to replace same origin with relative urls
+- Removes unwanted elements.
+- Collects resource paths for images, styles, scripts etc. including srcset in `<img>` elements.
+- Collects page paths from `<a href=...`.
+- Returns JSON {html, resources, pages}.
 
 Using a worker for this is not strictly necessary - the same thing could could be done from inside the update-pages container script, using an alternative HTML parser (html-rewriter is specific to workers). This design allows for periodic scheduling to check for modified origin pages, and self-update the static assets by launching the container only when something changed.
 

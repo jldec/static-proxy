@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "ship": "wrangler deploy",
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 3000",
     "types": "wrangler types --include-runtime false --strict-vars false",
     "tail": "wrangler tail"
   },

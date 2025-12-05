@@ -13,7 +13,7 @@ May be run once, or repeatedly e.g. if using original WP site for CMS.
 - Can serve subset of routes on any existing domain by using page-rules to trigger only on specific routes
   e.g. /, /conferences/, /certifications/, /wp-content/*, /wp-includes/*
 
-### Build container
+### container
 - Updates workers assets by running wrangler deploy against a directory inside the container.
 - Container includes git, cloned repo, pnpm install (for wrangler etc.), bun/deno, puppeteer.
 
@@ -29,8 +29,8 @@ May be run once, or repeatedly e.g. if using original WP site for CMS.
 
 Using a worker for this is not strictly necessary - the same thing could could be done from inside the update-pages container script, using an alternative HTML parser (html-rewriter is specific to workers). This design allows for periodic scheduling to check for modified origin pages, and self-update the static assets by launching the container only when something changed.
 
-### /update-pages
-- Launched by the update-pages.sh entrypoint script in the container
+### update-pages.sh
+- entrypoint script in the container
 - first git pull latest version of the repo
 - for each proxied page url (optionally recursing from root pages)
   - call /rewrite-page/url

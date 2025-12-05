@@ -6,9 +6,12 @@
     "ship": "wrangler deploy",
     "dev": "wrangler dev --port 3000",
     "types": "wrangler types --include-runtime false --strict-vars false",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "image:build": "docker build --platform linux/amd64 -t static-proxy .",
+    "image:run": "docker run --env-file .env --rm -p 3000:3000 static-proxy"
   },
   "devDependencies": {
+    "@cloudflare/containers": "^0.0.30",
     "@cloudflare/workers-types": "^4.20251127.0",
     "typescript": "^5.5.2",
     "wrangler": "^4.51.0"

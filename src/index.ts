@@ -1,20 +1,49 @@
 import { env } from 'cloudflare:workers'
+import { Container } from '@cloudflare/containers'
 
 const SOURCE_ORIGIN = env.SOURCE_ORIGIN
 const PROXY_ORIGIN = env.PROXY_ORIGIN
 
+// singleton durable object
+const containerID = 'container-id'
+const getContainerDO = () => env.CONTAINER_DO.getByName(containerID)
+
+// container DO class
+// https://developers.cloudflare.com/containers/container-package/
+// https://github.com/cloudflare/containers
+export class ContainerClass extends Container {
+  defaultPort = 3000
+  sleepAfter = '5m'
+
+  envVars = {
+  }
+
+  override async onStart() {
+    console.log('Container started')
+  }
+
+  override async onStop() {
+    console.log('Container stopped')
+  }
+}
+
 export default {
   async fetch(req) {
     const url = new URL(req.url)
-    let sourcePath = url.pathname
+    let path = url.pathname
     let htmlJson = false
 
-    if (sourcePath.startsWith('/rewrite-page/')) {
-      htmlJson = true
-      sourcePath = sourcePath.slice('/rewrite-page'.length)
+    if (url.pathname === '/hello') {
+      const container = getContainerDO()
+      return container.fetch(req)
     }
 
-    const source = new URL(PROXY_ORIGIN + sourcePath + url.search).toString()
+    if (path.startsWith('/rewrite-page/')) {
+      htmlJson = true
+      path = path.slice('/rewrite-page'.length)
+    }
+
+    const source = new URL(PROXY_ORIGIN + path + url.search).toString()
     try {
       const resp = await fetch(source, req)
       if (!resp.ok) return new Response(await resp.text(), { status: resp.status })
@@ -54,13 +83,13 @@ export default {
 // https://docs.rs/lol_html/latest/lol_html/struct.Selector.html#supported-selector
 
 // rewrite URLs to remove source origin
-// capture resources (images, scripts, stylesheets)
+// capture paths to resources (images, scripts, stylesheets)
 // capture links to other pages
 function capturingRewriter(resources: Set<string>, pages: Set<string>) {
   return (
     new HTMLRewriter()
       // selectors should be as specific as possible
-      // overlapping selectors like * trigger all handlers even if elements are removed in one
+      // overlapping selectors trigger all matching handlers
       .on('a[href]', anchorHref())
       .on('img[src]', fixImg())
       .on('form[action]', fixAttr('action'))

@@ -17,5 +17,26 @@
     "SOURCE_LEVELS": 0,
     "GH_REPO": "jldec/static-proxy",
     "GH_BRANCH": "main"
-  }
+  },
+  "containers": [
+    {
+      "class_name": "ContainerClass",
+      "image": "./Dockerfile",
+      "max_instances": 3
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "ContainerClass",
+        "name": "CONTAINER_DO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["ContainerClass"],
+      "tag": "v1"
+    }
+  ]
 }

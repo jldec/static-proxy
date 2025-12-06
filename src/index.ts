@@ -14,28 +14,24 @@ export default {
       sourcePath = sourcePath.slice('/rewrite-page'.length)
     }
 
-    const source = new URL(PROXY_ORIGIN + sourcePath + url.search).toString()
+    const proxyUrl = new URL(PROXY_ORIGIN + sourcePath + url.search).toString()
     try {
-      const resp = await fetch(source, req)
-      if (!resp.ok) return new Response(await resp.text(), { status: resp.status })
-
-      const contentType = resp.headers.get('content-type')
-      if (contentType?.includes('text/html')) {
-        console.log(req.method, source, 'rewriting HTML')
-
-        const resources = new Set<string>()
-        const pages = new Set<string>()
-        const rewrittenResp = capturingRewriter(resources, pages).transform(resp)
-
-        if (htmlJson) {
-          const html = await rewrittenResp.text()
-          return Response.json({ html, resources: [...resources], pages: [...pages] })
-        }
-        return new Response(rewrittenResp.body, { headers: { 'content-type': contentType } })
+      // pass headers and method - using req as fetch options breaks follow-redirects
+      const response = await fetch(proxyUrl, { headers: req.headers, method: req.method })
+      const contentType = response.headers.get('content-type')
+      // proxy all non-HTML responses including 304 and errors
+      if (!response.ok || !contentType?.includes('text/html')) {
+        return response
       }
-
-      console.log(req.method, source, 'simple proxy')
-      return resp
+      // rewrite HTML
+      const resources = new Set<string>()
+      const pages = new Set<string>()
+      const rewrittenResp = capturingRewriter(resources, pages).transform(response)
+      if (htmlJson) {
+        const html = await rewrittenResp.text()
+        return Response.json({ html, resources: [...resources], pages: [...pages] })
+      }
+      return new Response(rewrittenResp.body, { headers: { 'content-type': contentType } })
     } catch (error) {
       console.error(error)
       return new Response(String(error), { status: 500 })

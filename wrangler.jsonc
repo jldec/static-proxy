@@ -10,12 +10,14 @@
     "enabled": true
   },
   "vars": {
-    // NOTE: no trailing slash
+    // NOTE: no trailing slash on origins
+    // where to fetch HTML e.g. if testing with local copy
     "PROXY_ORIGIN": "https://test-assets.jldec.workers.dev",
-    "SOURCE_ORIGIN": "https://futuremedia-concepts.com",
-    "SOURCE_PATHS": "/",
-    "SOURCE_LEVELS": 0,
-    "GH_REPO": "jldec/static-proxy",
-    "GH_BRANCH": "main"
+    // origin to match in URLs to rewrite
+    "REWRITE_ORIGIN": "https://futuremedia-concepts.com",
+    // array of pages to fetch
+    "REWRITE_PATHS": ["/", "/conferences/", "/certifications/"],
+    // maximum depth to recurse links
+    "REWRITE_DEPTH": 0
   }
 }

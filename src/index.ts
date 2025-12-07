@@ -1,43 +1,103 @@
-import { env } from 'cloudflare:workers'
+export interface HtmlObj {
+  path: string
+  html?: string
+}
 
-const SOURCE_ORIGIN = env.SOURCE_ORIGIN
-const PROXY_ORIGIN = env.PROXY_ORIGIN
+export interface HtmlJsonResponse {
+  html: HtmlObj[]
+  resources: string[]
+  pages: string[]
+}
 
 export default {
-  async fetch(req) {
+  async fetch(req: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(req.url)
-    let sourcePath = url.pathname
-    let htmlJson = false
-
-    if (sourcePath.startsWith('/rewrite-page/')) {
-      htmlJson = true
-      sourcePath = sourcePath.slice('/rewrite-page'.length)
+    const path = url.pathname
+    const proxyOrigin = url.searchParams.get('proxy-origin') || env.PROXY_ORIGIN
+    if (!proxyOrigin) {
+      return new Response('Proxy origin is required', { status: 400 })
     }
+    const rewriteOrigin = url.searchParams.get('rewrite-origin') || env.REWRITE_ORIGIN || proxyOrigin
 
-    const proxyUrl = new URL(PROXY_ORIGIN + sourcePath + url.search).toString()
+    // html-json mode
+    if (path.startsWith('/html-json/')) {
+      const resources = new Set<string>()
+      const pages = new Set<string>()
+
+      const encoder = new TextEncoder();
+      const { readable, writable } = new TransformStream<string, Uint8Array>({
+        transform(chunk, controller) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+      });
+      const writer = writable.getWriter()
+
+      // default to just the current path
+      let rewritePaths = [path.slice('/html-json'.length)]
+      const pathsParam = url.searchParams.get('rewrite-paths')
+      if (pathsParam) {
+        rewritePaths = pathsParam.split(',')
+      } else if (env.REWRITE_PATHS) {
+        rewritePaths = env.REWRITE_PATHS
+      }
+
+      ctx.waitUntil(
+        (async () => {
+          try {
+            await writer.write('{"html":[\n')
+            for (let index = 0; index < rewritePaths.length; index++) {
+              const path = rewritePaths[index]
+              const proxyUrl = new URL(path, proxyOrigin).toString()
+              const response = await fetch(proxyUrl)
+              const contentType = response.headers.get('content-type')
+              const htmlObj: HtmlObj = { path }
+              if (response.ok && contentType?.includes('text/html')) {
+                console.log(`rewriting ${path}`)
+                const rewrittenResp = capturingRewriter(rewriteOrigin, resources, pages).transform(response)
+                htmlObj.html = await rewrittenResp.text()
+              }
+              else {
+                console.log(`rewrite failed: ${req.method} ${proxyUrl} ${response.status} ${contentType}`)
+              }
+              await writer.write(JSON.stringify(htmlObj))
+              if (index < rewritePaths.length - 1) {
+                await writer.write(',\n')
+              }
+            }
+            await writer.write('\n]')
+            await writer.write(',\n"resources":\n')
+            await writer.write(JSON.stringify(Array.from(resources)))
+            await writer.write(',\n"pages":\n')
+            await writer.write(JSON.stringify(Array.from(pages)))
+            await writer.write('\n}\n')
+          } catch (error) {
+            console.error(`Error rewriting ${path}: ${error}`)
+          } finally {
+            await writer.close()
+          }
+        })()
+      )
+      return new Response(readable, { headers: { 'content-type': 'application/json' } })
+    }
+    // vanilla proxy mode
+    const proxyUrl = new URL(path + url.search, proxyOrigin).toString()
     try {
       // pass headers and method - using req as fetch options breaks follow-redirects
       const response = await fetch(proxyUrl, { headers: req.headers, method: req.method })
       const contentType = response.headers.get('content-type')
       // proxy all non-HTML responses including 304 and errors
       if (!response.ok || !contentType?.includes('text/html')) {
+        console.log(`PROXY: ${req.method} ${proxyUrl} ${response.status} ${contentType}`)
         return response
       }
-      // rewrite HTML
-      const resources = new Set<string>()
-      const pages = new Set<string>()
-      const rewrittenResp = capturingRewriter(resources, pages).transform(response)
-      if (htmlJson) {
-        const html = await rewrittenResp.text()
-        return Response.json({ html, resources: [...resources], pages: [...pages] })
-      }
+      const rewrittenResp = capturingRewriter(rewriteOrigin).transform(response)
       return new Response(rewrittenResp.body, { headers: { 'content-type': contentType } })
     } catch (error) {
-      console.error(error)
+      console.error(`Error fetching ${proxyUrl}: ${error}`)
       return new Response(String(error), { status: 500 })
     }
   }
-} satisfies ExportedHandler<Env>
+}
 
 // HTMLRewriter
 // https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/
@@ -48,11 +108,11 @@ export default {
 // https://blog.cloudflare.com/html-parsing-2/
 // https://github.com/cloudflare/lol-html
 // https://docs.rs/lol_html/latest/lol_html/struct.Selector.html#supported-selector
-
-// rewrite URLs to remove source origin
+//
+// rewrite URLs to remove rewriteOrigin
 // capture resources (images, scripts, stylesheets)
 // capture links to other pages
-function capturingRewriter(resources: Set<string>, pages: Set<string>) {
+function capturingRewriter(rewriteOrigin: string, resources = new Set<string>(), pages = new Set<string>()) {
   return (
     new HTMLRewriter()
       // selectors should be as specific as possible
@@ -84,17 +144,26 @@ function capturingRewriter(resources: Set<string>, pages: Set<string>) {
       )
   )
 
+  // remove origin from urls, with or without escaped /
+  // see below for usage examples
+  function rewriteUrls(url: string) {
+    const search1 = rewriteOrigin
+    const search2 = rewriteOrigin.replaceAll('/', '\\/')
+    return url.replaceAll(search1, '').replaceAll(search2, '')
+  }
+
+  // capture links to other pages on the same origin
   function anchorHref(): HTMLRewriterElementContentHandlers {
     return {
       element(el: Element) {
         const href = el.getAttribute('href')
         if (href) {
           try {
-            el.setAttribute('href', rewriteUrls(href))
             // capture relative urls as well as absolute
-            const parsed = new URL(href, SOURCE_ORIGIN)
-            if (parsed.origin === SOURCE_ORIGIN) {
+            const parsed = new URL(href, rewriteOrigin)
+            if (parsed.origin === rewriteOrigin) {
               pages.add(parsed.pathname + parsed.search)
+              el.setAttribute('href', rewriteUrls(href))
             }
           } catch {
             // ignore invalid URLs
@@ -128,8 +197,8 @@ function capturingRewriter(resources: Set<string>, pages: Set<string>) {
   function captureSrc(url: string) {
     try {
       // capture relative urls as well as absolute
-      const parsed = new URL(url, SOURCE_ORIGIN)
-      if (parsed.origin === SOURCE_ORIGIN) {
+      const parsed = new URL(url, rewriteOrigin)
+      if (parsed.origin === rewriteOrigin) {
         resources.add(parsed.pathname + parsed.search)
       }
     } catch {
@@ -143,13 +212,6 @@ function capturingRewriter(resources: Set<string>, pages: Set<string>) {
       const url = part.trim().split(/\s+/)[0]
       if (url) captureSrc(url)
     }
-  }
-
-  // remove origin from urls, with or without escaped /
-  function rewriteUrls(url: string) {
-    const search1 = SOURCE_ORIGIN
-    const search2 = SOURCE_ORIGIN.replaceAll('/', '\\/')
-    return url.replaceAll(search1, '').replaceAll(search2, '')
   }
 
   // rewrite urls in HTML attributes, optionally capturing resources

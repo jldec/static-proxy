@@ -16,6 +16,6 @@
     "skipLibCheck": true,
     "types": ["@cloudflare/workers-types/2023-07-01", "./worker-configuration.d.ts"]
   },
-  "exclude": ["test"],
+  "exclude": ["migrate.ts"],
   "include": ["worker-configuration.d.ts", "src/**/*.ts"]
 }

@@ -6,10 +6,12 @@
     "ship": "wrangler deploy",
     "dev": "wrangler dev --port 3000",
     "types": "wrangler types --include-runtime false --strict-vars false",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "migrate": "bun migrate.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251127.0",
+    "@types/node": "^24.10.1",
     "typescript": "^5.5.2",
     "wrangler": "^4.51.0"
   },

@@ -1,10 +1,16 @@
 /*
 # migrate.ts
 This script works with bun or nodejs.
-Populates /public directory with static assets based on output of /html-json/ e.g.
+Populates /public directory with static assets based on output of /html-json/ and /proxy-capture.
 
 ```sh
 curl http://localhost:3000/html-json/ > out.json
+bun migrate.ts
+
+# modify OUTFILE = out2.json below (TODO: make this a command line argument)
+curl http://localhost:3000/reset-proxy-capture
+# use browser to trigger missing resources
+curl http://localhost:3000/proxy-capture > out2.json
 bun migrate.ts
 ```
 

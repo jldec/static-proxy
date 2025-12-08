@@ -9,6 +9,12 @@ export interface HtmlJsonResponse {
   pages: string[]
 }
 
+export interface ProxyCaptureResources {
+  resources: string[]
+}
+
+let proxyCaptureResources = new Set<string>()
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(req.url)
@@ -24,12 +30,12 @@ export default {
       const resources = new Set<string>()
       const pages = new Set<string>()
 
-      const encoder = new TextEncoder();
+      const encoder = new TextEncoder()
       const { readable, writable } = new TransformStream<string, Uint8Array>({
         transform(chunk, controller) {
-          controller.enqueue(encoder.encode(chunk));
+          controller.enqueue(encoder.encode(chunk))
         }
-      });
+      })
       const writer = writable.getWriter()
 
       // default to just the current path
@@ -55,20 +61,19 @@ export default {
                 console.log(`rewriting ${path}`)
                 const rewrittenResp = capturingRewriter(rewriteOrigin, resources, pages).transform(response)
                 htmlObj.html = await rewrittenResp.text()
-              }
-              else {
+              } else {
                 console.log(`rewrite failed: ${req.method} ${proxyUrl} ${response.status} ${contentType}`)
               }
-              await writer.write(JSON.stringify(htmlObj))
+              await writer.write(JSON.stringify(htmlObj, null, 2))
               if (index < rewritePaths.length - 1) {
                 await writer.write(',\n')
               }
             }
             await writer.write('\n]')
             await writer.write(',\n"resources":\n')
-            await writer.write(JSON.stringify(Array.from(resources)))
+            await writer.write(JSON.stringify(Array.from(resources), null, 2))
             await writer.write(',\n"pages":\n')
-            await writer.write(JSON.stringify(Array.from(pages)))
+            await writer.write(JSON.stringify(Array.from(pages), null, 2))
             await writer.write('\n}\n')
           } catch (error) {
             console.error(`Error rewriting ${path}: ${error}`)
@@ -79,6 +84,18 @@ export default {
       )
       return new Response(readable, { headers: { 'content-type': 'application/json' } })
     }
+
+    if (path === '/reset-proxy-capture') {
+      proxyCaptureResources = new Set<string>()
+      return new Response('Proxy capture mode reset\n')
+    }
+
+    if (path === '/proxy-capture') {
+      return new Response(JSON.stringify({ resources: Array.from(proxyCaptureResources) }, null, 2), {
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+
     // vanilla proxy mode
     const proxyUrl = new URL(path + url.search, proxyOrigin).toString()
     try {
@@ -88,6 +105,9 @@ export default {
       // proxy all non-HTML responses including 304 and errors
       if (!response.ok || !contentType?.includes('text/html')) {
         console.log(`PROXY: ${req.method} ${proxyUrl} ${response.status} ${contentType}`)
+        if (response.ok || response.status === 304) {
+          proxyCaptureResources.add(path + url.search)
+        }
         return response
       }
       const rewrittenResp = capturingRewriter(rewriteOrigin).transform(response)

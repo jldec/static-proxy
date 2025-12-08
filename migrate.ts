@@ -25,10 +25,11 @@ import type { HtmlJsonResponse } from "./src/index"
 
 const PROXY_ORIGIN = "http://localhost:3001"
 const PUBLIC_DIR = "./public"
+const OUTFILE = "./out2.json"
 
-const json: HtmlJsonResponse = JSON.parse(await readFile("./out.json", "utf-8"))
+const json: HtmlJsonResponse = JSON.parse(await readFile(OUTFILE, "utf-8"))
 
-for (const htmlObj of json.html) {
+for (const htmlObj of json.html || []) {
   let filePath = htmlObj.path
   if (filePath.endsWith("/")) {
     filePath = filePath + "index.html"
@@ -41,7 +42,7 @@ for (const htmlObj of json.html) {
   console.log(`Wrote ${fullPath}`)
 }
 
-for (const resourcePath of json.resources) {
+for (const resourcePath of json.resources || []) {
   const pathWithoutQuery = resourcePath.split("?")[0]
   const url = PROXY_ORIGIN + resourcePath
   console.log(`Fetching ${url}`)
